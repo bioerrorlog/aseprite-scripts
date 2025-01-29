@@ -1,6 +1,7 @@
 --------------------------------------------------------------------------------
 -- perlin_noise_circles.lua
--- パーリンノイズに従い、フレームごとに黒い円を描画するサンプルスクリプト
+-- フレームごとに描画される円の数を増やしつつ、
+-- パーリンノイズに従って x座標・y座標・半径 を変動させるサンプルスクリプト
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -66,7 +67,7 @@ local function perlin2d(x, y)
   local x2 = lerp(grad(ab, xf, yf-1), grad(bb, xf - 1, yf-1), u)
   local val = lerp(x1, x2, v)
 
-  return val
+  return val -- -1 ~ +1
 end
 
 --------------------------------------------------------------------------------
@@ -97,12 +98,12 @@ dlg:entry{ id="width",   label="Width",   text="128" }
 dlg:entry{ id="height",  label="Height",  text="128" }
 dlg:entry{ id="frames",  label="Frames",  text="16" }
 
-dlg:label{ text="円の半径、ノイズのスケールなどを設定できます。" }
-dlg:entry{ id="radius",      label="Circle Radius", text="16" }
-dlg:entry{ id="noiseScale",  label="Noise Scale",   text="0.1",
-           tooltip="パーリンノイズに掛ける倍率が大きいほど動きが激しくなる" }
-dlg:entry{ id="timeOffset",  label="Time Step",     text="0.5",
-           tooltip="フレームごとにノイズのx, yに足す値。アニメの動き具合を調整" }
+dlg:label{ text="円の最大半径、ノイズのスケールなどを設定できます。" }
+dlg:entry{ id="radius",      label="Max Circle Radius", text="16" }
+dlg:entry{ id="noiseScale",  label="Noise Scale",       text="0.1",
+           tooltip="パーリンノイズの変化量を大きくする" }
+dlg:entry{ id="timeOffset",  label="Time Step",         text="0.5",
+           tooltip="フレームや円ごとに増やす時間の刻み幅" }
 
 dlg:button{ id="ok", text="OK" }
 dlg:button{ id="cancel", text="Cancel" }
@@ -116,7 +117,7 @@ end
 local width   = tonumber(data.width)
 local height  = tonumber(data.height)
 local frames  = tonumber(data.frames)
-local radius  = tonumber(data.radius)
+local maxRad  = tonumber(data.radius)
 local nscale  = tonumber(data.noiseScale)
 local tstep   = tonumber(data.timeOffset)
 
@@ -125,7 +126,6 @@ local spr = Sprite(width, height, ColorMode.RGB)
 spr.filename = "perlin_circles.ase"
 
 -- 必要なフレーム数に合わせて追加
--- 既に1フレームあるので framesが2以上なら差分を追加
 if frames > 1 then
   for i = 2, frames do
     spr:newFrame()
@@ -134,24 +134,38 @@ end
 
 local black = Color{ r=0, g=0, b=0, a=255 }
 
-local time = 0.0
+--------------------------------------------------------------------------------
+-- 4. メインループ:
+--    各フレーム f について: f 個の円をノイズに従って描画
+--------------------------------------------------------------------------------
 for f = 1, frames do
   local cel = spr.cels[f]
   local image = cel.image
 
-  -- パーリンノイズから座標算出 (-1..+1 を 0..1 に正規化 -> 幅・高さへ)
-  local noiseX = perlin2d(time * nscale, 10.0)
-  local noiseY = perlin2d(20.0, time * nscale)
-  local cx = (noiseX + 1) / 2 * width
-  local cy = (noiseY + 1) / 2 * height
+  -- フレーム f では、円を f 個だけ描画する
+  for i = 1, f do
+    -- フレーム番号 + i に応じて時間をずらす
+    -- → circleTimeX, circleTimeY, circleTimeR などを別々にしても OK
+    local circleTimeX = tstep * (f + i)       -- X座標用ノイズの時間
+    local circleTimeY = tstep * (100 + f + i) -- Y座標用ノイズの時間（位相ずらし用に100を足す）
+    local circleTimeR = tstep * (200 + f + i) -- 半径用ノイズの時間（さらに200を足す）
 
-  -- 円を描画
-  drawFilledCircle(image, cx, cy, radius, black)
+    -- X, Y は各々異なるノイズ座標で取得
+    local noiseValX = perlin2d(circleTimeX * nscale, circleTimeX * 0.5)
+    local noiseValY = perlin2d(circleTimeY * 0.5, circleTimeY * nscale)
 
-  -- スプライト更新
-  spr.cels[f].image = image
+    -- 0..1 に正規化してキャンバス上の座標に変換
+    local cx = (noiseValX + 1) / 2 * width
+    local cy = (noiseValY + 1) / 2 * height
 
-  time = time + tstep
+    -- 円の半径もノイズで変動 (-1..+1 -> 0..1 -> 1..maxRad)
+    local noiseValR = perlin2d(circleTimeR * nscale, circleTimeR * nscale)
+    local r = 1 + ((noiseValR + 1)/2) * (maxRad - 1)
+    -- ※noiseValR=-1のとき r=1, noiseValR=+1のとき r=maxRad
+
+    -- 円を描画
+    drawFilledCircle(image, cx, cy, r, black)
+  end
 end
 
 app.refresh()
