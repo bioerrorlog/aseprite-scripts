@@ -1,7 +1,7 @@
 --------------------------------------------------------------------------------
--- perlin_noise_circles.lua
--- フレームごとに描画される円の数を増やしつつ、
--- パーリンノイズに従って x座標・y座標・半径 を変動させるサンプルスクリプト
+-- perlin_noise_circles_accumulate.lua
+-- フレームが進むとそれまでの円をそのまま保持しつつ、
+-- 新たな円を加えていくスクリプト
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -67,7 +67,7 @@ local function perlin2d(x, y)
   local x2 = lerp(grad(ab, xf, yf-1), grad(bb, xf - 1, yf-1), u)
   local val = lerp(x1, x2, v)
 
-  return val -- -1 ~ +1
+  return val
 end
 
 --------------------------------------------------------------------------------
@@ -92,7 +92,7 @@ end
 --------------------------------------------------------------------------------
 -- 3. ダイアログ表示してパラメータ取得 -> スプライト生成
 --------------------------------------------------------------------------------
-local dlg = Dialog("Perlin Noise Circles")
+local dlg = Dialog("Perlin Noise Circles (Accumulate)")
 dlg:label{ text="キャンバスサイズ・フレーム数を指定してください。" }
 dlg:entry{ id="width",   label="Width",   text="128" }
 dlg:entry{ id="height",  label="Height",  text="128" }
@@ -101,7 +101,7 @@ dlg:entry{ id="frames",  label="Frames",  text="16" }
 dlg:label{ text="円の最大半径、ノイズのスケールなどを設定できます。" }
 dlg:entry{ id="radius",      label="Max Circle Radius", text="16" }
 dlg:entry{ id="noiseScale",  label="Noise Scale",       text="0.1",
-           tooltip="パーリンノイズの変化量を大きくする" }
+           tooltip="パーリンノイズの変化量" }
 dlg:entry{ id="timeOffset",  label="Time Step",         text="0.5",
            tooltip="フレームや円ごとに増やす時間の刻み幅" }
 
@@ -121,9 +121,11 @@ local maxRad  = tonumber(data.radius)
 local nscale  = tonumber(data.noiseScale)
 local tstep   = tonumber(data.timeOffset)
 
--- 新規スプライト（RGBA カラーモード）
+--------------------------------------------------------------------------------
+-- 新規スプライトを作成（RGBA モード）
+--------------------------------------------------------------------------------
 local spr = Sprite(width, height, ColorMode.RGB)
-spr.filename = "perlin_circles.ase"
+spr.filename = "perlin_circles_accumulate.ase"
 
 -- 必要なフレーム数に合わせて追加
 if frames > 1 then
@@ -135,35 +137,35 @@ end
 local black = Color{ r=0, g=0, b=0, a=255 }
 
 --------------------------------------------------------------------------------
--- 4. メインループ:
---    各フレーム f について: f 個の円をノイズに従って描画
+-- 4. フレームのループ
+--    「前フレームの円を保持したまま」＋「フレーム f では f 個の新しい円を描画」
 --------------------------------------------------------------------------------
 for f = 1, frames do
   local cel = spr.cels[f]
   local image = cel.image
 
-  -- フレーム f では、円を f 個だけ描画する
+  -- (重要) もし f > 1 なら、前のフレームの画像をコピーしておく
+  -- こうすることで、過去フレームの円をそのまま保持したまま上書きできる
+  if f > 1 then
+    local prevImage = spr.cels[f-1].image
+    image:drawImage(prevImage)
+  end
+
+  -- フレーム f では、f個の円を追加で描画
   for i = 1, f do
-    -- フレーム番号 + i に応じて時間をずらす
-    -- → circleTimeX, circleTimeY, circleTimeR などを別々にしても OK
-    local circleTimeX = tstep * (f + i)       -- X座標用ノイズの時間
-    local circleTimeY = tstep * (100 + f + i) -- Y座標用ノイズの時間（位相ずらし用に100を足す）
-    local circleTimeR = tstep * (200 + f + i) -- 半径用ノイズの時間（さらに200を足す）
+    -- X, Y, R (半径) をそれぞれノイズで変動させる
+    local circleTimeX = tstep * (f + i)
+    local circleTimeY = tstep * (100 + f + i)
+    local circleTimeR = tstep * (200 + f + i)
 
-    -- X, Y は各々異なるノイズ座標で取得
     local noiseValX = perlin2d(circleTimeX * nscale, circleTimeX * 0.5)
-    local noiseValY = perlin2d(circleTimeY * 0.5, circleTimeY * nscale)
+    local noiseValY = perlin2d(circleTimeY * 0.5,    circleTimeY * nscale)
+    local noiseValR = perlin2d(circleTimeR * nscale, circleTimeR * nscale)
 
-    -- 0..1 に正規化してキャンバス上の座標に変換
     local cx = (noiseValX + 1) / 2 * width
     local cy = (noiseValY + 1) / 2 * height
+    local r  = 1 + ((noiseValR + 1) / 2) * (maxRad - 1)
 
-    -- 円の半径もノイズで変動 (-1..+1 -> 0..1 -> 1..maxRad)
-    local noiseValR = perlin2d(circleTimeR * nscale, circleTimeR * nscale)
-    local r = 1 + ((noiseValR + 1)/2) * (maxRad - 1)
-    -- ※noiseValR=-1のとき r=1, noiseValR=+1のとき r=maxRad
-
-    -- 円を描画
     drawFilledCircle(image, cx, cy, r, black)
   end
 end
