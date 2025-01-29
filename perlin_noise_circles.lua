@@ -99,10 +99,10 @@ dlg:entry{ id="height",  label="Height",  text="128" }
 dlg:entry{ id="frames",  label="Frames",  text="16" }
 
 dlg:label{ text="円の最大半径、ノイズのスケールなどを設定できます。" }
-dlg:entry{ id="radius",      label="Max Circle Radius", text="16" }
-dlg:entry{ id="noiseScale",  label="Noise Scale",       text="0.1",
+dlg:entry{ id="radius",      label="Max Circle Radius", text="60" }
+dlg:entry{ id="noiseScale",  label="Noise Scale",       text="0.01",
            tooltip="パーリンノイズの変化量" }
-dlg:entry{ id="timeOffset",  label="Time Step",         text="0.5",
+dlg:entry{ id="timeOffset",  label="Time Step",         text="0.05",
            tooltip="フレームや円ごとに増やす時間の刻み幅" }
 
 dlg:button{ id="ok", text="OK" }
